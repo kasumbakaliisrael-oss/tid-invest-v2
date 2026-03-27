@@ -1,1 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
 
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String      @id @default(cuid())
+  phone                 String      @unique
+  password              String
+  referralCode          String      @unique
+  referredByCode        String?
+  referredBy            User?       @relation("Referrals", fields: [referredByCode], references: [referralCode])
+  referrals             User[]      @relation("Referrals")
+  wallet                Wallet?
+  vipProducts           VIPProduct[]
+  transactions          Transaction[]
+  recharges             Recharge[]
+  withdrawals           Withdrawal[]
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  isBlocked             Boolean     @default(false)
+  lastWithdrawalDate    DateTime?
+}
+
+model Wallet {
+  id                    String      @id @default(cuid())
+  userId                String      @unique
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance               Decimal     @default(1500) @db.Decimal(18, 2)
+  totalEarned           Decimal     @default(0) @db.Decimal(18, 2)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+}
+
+model VIPProduct {
+  id                    String      @id @default(cuid())
+  name                  String
+  price                 Decimal     @db.Decimal(18, 2)
+  dailyIncome           Decimal     @db.Decimal(18, 2)
+  durationDays          Int         @default(180)
+  createdAt             DateTime    @default(now())
+  activations           VIPActivation[]
+}
+
+model VIPActivation {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId             String
+  product               VIPProduct  @relation(fields: [productId], references: [id])
+  startDate             DateTime    @default(now())
+  endDate               DateTime
+  totalGenerated        Decimal     @default(0) @db.Decimal(18, 2)
+  lastRevenueDate       DateTime    @default(now())
+  status                String      @default("active")
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+}
+
+model Transaction {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type                  String
+  amount                Decimal     @db.Decimal(18, 2)
+  description           String?
+  referralLevel         Int?
+  createdAt             DateTime    @default(now())
+}
+
+model Recharge {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount                Decimal     @db.Decimal(18, 2)
+  transactionId         String
+  senderPhone           String
+  status                String      @default("pending")
+  rejectionReason       String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+}
+
+model Withdrawal {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount                Decimal     @db.Decimal(18, 2)
+  amountAfterTax        Decimal     @db.Decimal(18, 2)
+  taxAmount             Decimal     @db.Decimal(18, 2)
+  status                String      @default("pending")
+  rejectionReason       String?
+  requestedAt           DateTime    @default(now())
+  completedAt           DateTime?
+}
