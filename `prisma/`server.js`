@@ -1,1 +1,118 @@
 
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
+
+dotenv.config();
+
+const app = express();
+const prisma = new PrismaClient();
+
+// ============ MIDDLEWARE SÉCURITÉ ============
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// ============ LOGGING MIDDLEWARE ============
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
+// ============ ROUTE DE TEST ============
+app.get('/api/health', (req, res) => {
+  try {
+    res.status(200).json({
+      status: 'OK',
+      message: 'Serveur TID-Invest v2 fonctionne correctement',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      database: 'PostgreSQL + Prisma'
+    });
+  } catch (error) {
+    console.error('Erreur health check:', error);
+    res.status(500).json({
+      error: 'Erreur serveur',
+      message: 'Veuillez réessayer plus tard'
+    });
+  }
+});
+
+// ============ VÉRIFIER CONNEXION DATABASE ============
+app.get('/api/db-check', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({
+      status: 'OK',
+      message: 'Connexion PostgreSQL établie',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Erreur connexion DB:', error);
+    res.status(500).json({
+      error: 'Erreur base de données',
+      message: 'Impossible de se connecter à PostgreSQL'
+    });
+  }
+});
+
+// ============ GESTION 404 ============
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Route non trouvée',
+    path: req.originalUrl,
+    message: 'Cette endpoint n\'existe pas'
+  });
+});
+
+// ============ GESTION ERREURS GLOBALES ============
+app.use((err, req, res, next) => {
+  console.error('Erreur globale:', err);
+  res.status(500).json({
+    error: 'Erreur serveur interne',
+    message: 'Veuillez réessayer plus tard',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ============ DÉMARRAGE ============
+const PORT = process.env.PORT || 5000;
+
+async function startServer() {
+  try {
+    // Vérifier connexion Prisma
+    await prisma.$connect();
+    console.log('✅ Prisma connecté à PostgreSQL');
+
+    // Démarrer serveur Express
+    app.listen(PORT, () => {
+      console.log(`🚀 Serveur lancé sur le port ${PORT}`);
+      console.log(`📍 Environnement: ${process.env.NODE_ENV}`);
+      console.log(`🗄️  Base de données: PostgreSQL + Prisma`);
+      console.log(`\n📊 Routes disponibles:`);
+      console.log(`   GET /api/health - Vérifier serveur`);
+      console.log(`   GET /api/db-check - Vérifier base de données\n`);
+    });
+  } catch (error) {
+    console.error('❌ Erreur démarrage serveur:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
+
+// ============ GESTION ARRÊT GRACIEUX ============
+process.on('SIGINT', async () => {
+  console.log('\n⛔ Arrêt du serveur...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n⛔ Arrêt du serveur...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
